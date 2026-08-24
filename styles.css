@@ -53,7 +53,7 @@ p {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -86,6 +86,24 @@ input[type="color"] {
   border: 1px solid #b8c0ca;
   border-radius: 6px;
   background: #fff;
+}
+
+input[type="text"] {
+  width: 100%;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid #b8c0ca;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.field {
+  grid-column: span 2;
+}
+
+.field-wide {
+  grid-column: span 4;
 }
 
 button {
@@ -144,5 +162,10 @@ progress {
 
   .controls {
     grid-template-columns: 1fr;
+  }
+
+  .field,
+  .field-wide {
+    grid-column: auto;
   }
 }

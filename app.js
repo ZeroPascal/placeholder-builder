@@ -5,6 +5,8 @@ const fileOneInput = document.querySelector("#fileOneInput");
 const fileTwoInput = document.querySelector("#fileTwoInput");
 const backgroundColorInput = document.querySelector("#backgroundColorInput");
 const textColorInput = document.querySelector("#textColorInput");
+const animationColorInput = document.querySelector("#animationColorInput");
+const outputFolderInput = document.querySelector("#outputFolderInput");
 const generateButton = document.querySelector("#generateButton");
 const previewCanvas = document.querySelector("#previewCanvas");
 const statusText = document.querySelector("#statusText");
@@ -101,15 +103,10 @@ async function readCsvFile(file, fileLabel, minimumColumns) {
 }
 
 function updateGenerateState() {
-  generateButton.disabled = fileOneRows.length === 0 || fileTwoRows.length === 0;
-}
-
-function sanitizeFileName(value) {
-  return value
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 180);
+  generateButton.disabled =
+    fileOneRows.length === 0 ||
+    fileTwoRows.length === 0 ||
+    outputFolderInput.value.trim().length === 0;
 }
 
 function makeImageText(fileOneRow, fileTwoRow) {
@@ -118,82 +115,6 @@ function makeImageText(fileOneRow, fileTwoRow) {
     requiredCell(fileTwoRow, 0, "File 2 column 1"),
     `${requiredCell(fileTwoRow, 1, "File 2 column 2")}-${requiredCell(fileTwoRow, 2, "File 2 column 3")}`,
   ];
-}
-
-function makeOutputName(fileOneRow, fileTwoRow) {
-  const rawName = [
-    `${requiredCell(fileOneRow, 0, "File 1 column 1")}-${requiredCell(fileTwoRow, 1, "File 2 column 2")}`,
-    requiredCell(fileOneRow, 1, "File 1 column 2"),
-    requiredCell(fileTwoRow, 0, "File 2 column 1"),
-    requiredCell(fileTwoRow, 2, "File 2 column 3"),
-  ].join(" ");
-
-  return `${sanitizeFileName(rawName) || "placeholder"}.png`;
-}
-
-function makeUniqueFileName(fileName, usedFileNames) {
-  const match = fileName.match(/^(.*?)(\.png)$/i);
-  const baseName = match ? match[1] : fileName;
-  const extension = match ? match[2] : ".png";
-  let candidate = fileName;
-  let duplicateIndex = 2;
-
-  while (usedFileNames.has(candidate.toLowerCase())) {
-    candidate = `${baseName} (${duplicateIndex})${extension}`;
-    duplicateIndex += 1;
-  }
-
-  usedFileNames.add(candidate.toLowerCase());
-  return candidate;
-}
-
-function drawImage(canvas, lines, backgroundColor, textColor) {
-  const context = canvas.getContext("2d");
-  context.fillStyle = backgroundColor;
-  context.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
-
-  context.fillStyle = textColor;
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.font = "700 96px Arial, Helvetica, sans-serif";
-
-  const lineHeight = 124;
-  const startY = IMAGE_HEIGHT / 2 - ((lines.length - 1) * lineHeight) / 2;
-
-  lines.forEach((line, index) => {
-    context.fillText(line, IMAGE_WIDTH / 2, startY + index * lineHeight, IMAGE_WIDTH - 160);
-  });
-}
-
-function canvasToBlob(canvas) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error("Could not create PNG image."));
-      }
-    }, "image/png");
-  });
-}
-
-async function createPngBlob(canvas) {
-  if ("convertToBlob" in canvas) {
-    return canvas.convertToBlob({ type: "image/png" });
-  }
-
-  return canvasToBlob(canvas);
-}
-
-function createWorkingCanvas() {
-  if ("OffscreenCanvas" in window) {
-    return new OffscreenCanvas(IMAGE_WIDTH, IMAGE_HEIGHT);
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = IMAGE_WIDTH;
-  canvas.height = IMAGE_HEIGHT;
-  return canvas;
 }
 
 function getOutputRows() {
@@ -211,20 +132,56 @@ function getOutputRows() {
   return rows;
 }
 
-function renderPreview() {
+function drawPie(context, centerX, centerY, radius, progress, color) {
+  context.save();
+  context.strokeStyle = color;
+  context.lineWidth = 10;
+  context.globalAlpha = 0.28;
+  context.beginPath();
+  context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  context.stroke();
+
+  context.globalAlpha = 1;
+  context.fillStyle = color;
+  context.beginPath();
+  context.moveTo(centerX, centerY);
+  context.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+  context.closePath();
+  context.fill();
+  context.restore();
+}
+
+function drawPreview(progress) {
+  const context = previewCanvas.getContext("2d");
   const fileOneRow = fileOneRows[0] || ["File1Col1", "File1Col2"];
   const fileTwoRow = fileTwoRows.find((row) => (row[2] || "").trim().length > 0) || [
     "File2Col1",
     "File2Col2",
     "File2Col3",
   ];
+  const lines = makeImageText(fileOneRow, fileTwoRow);
 
-  drawImage(
-    previewCanvas,
-    makeImageText(fileOneRow, fileTwoRow),
-    backgroundColorInput.value,
-    textColorInput.value,
-  );
+  context.fillStyle = backgroundColorInput.value;
+  context.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+
+  context.fillStyle = textColorInput.value;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = "700 96px Arial, Helvetica, sans-serif";
+
+  const lineHeight = 124;
+  const startY = IMAGE_HEIGHT / 2 - ((lines.length - 1) * lineHeight) / 2;
+
+  lines.forEach((line, index) => {
+    context.fillText(line, IMAGE_WIDTH / 2, startY + index * lineHeight, IMAGE_WIDTH - 160);
+  });
+
+  drawPie(context, IMAGE_WIDTH / 2, 850, 100, progress, animationColorInput.value);
+}
+
+function renderPreview() {
+  drawPreview((performance.now() % 5000) / 5000);
+  requestAnimationFrame(renderPreview);
 }
 
 async function handleFileChange() {
@@ -233,11 +190,10 @@ async function handleFileChange() {
     fileTwoRows = await readCsvFile(fileTwoInput.files[0], "File 2", 3);
 
     updateGenerateState();
-    renderPreview();
 
     if (fileOneRows.length > 0 && fileTwoRows.length > 0) {
       const outputCount = getOutputRows().length;
-      setStatus(`${fileOneRows.length} File 1 rows and ${fileTwoRows.length} File 2 rows loaded. ${outputCount} PNGs ready.`);
+      setStatus(`${fileOneRows.length} File 1 rows and ${fileTwoRows.length} File 2 rows loaded. ${outputCount} MOVs ready.`);
     }
   } catch (error) {
     generateButton.disabled = true;
@@ -245,58 +201,46 @@ async function handleFileChange() {
   }
 }
 
-async function writePng(directoryHandle, fileName, blob) {
-  const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(blob);
-  await writable.close();
-}
-
-async function generateImages() {
-  if (!window.showDirectoryPicker) {
-    setStatus("This browser does not support choosing an output folder. Use current Chrome, Edge, or another Chromium browser.");
-    return;
-  }
-
+async function generateVideos() {
   try {
+    if (window.location.protocol === "file:") {
+      throw new Error("Open http://127.0.0.1:5173 to generate MOV files.");
+    }
+
     const outputRows = getOutputRows();
     if (outputRows.length === 0) {
       setStatus("No files to generate because File 2 column 3 is empty in every row.");
       return;
     }
 
-    const directoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    const workingCanvas = createWorkingCanvas();
-
     progressBar.hidden = false;
     progressBar.value = 0;
     progressBar.max = outputRows.length;
     generateButton.disabled = true;
-    const usedFileNames = new Set();
+    setStatus("Starting MOV generation...");
 
-    for (const [index, outputRow] of outputRows.entries()) {
-      const lines = makeImageText(outputRow.fileOneRow, outputRow.fileTwoRow);
-      const fileName = makeUniqueFileName(
-        makeOutputName(outputRow.fileOneRow, outputRow.fileTwoRow),
-        usedFileNames,
-      );
+    const response = await fetch("/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileOneRows,
+        fileTwoRows,
+        backgroundColor: backgroundColorInput.value,
+        textColor: textColorInput.value,
+        animationColor: animationColorInput.value,
+        outputFolder: outputFolderInput.value.trim(),
+      }),
+    });
 
-      drawImage(workingCanvas, lines, backgroundColorInput.value, textColorInput.value);
-      const blob = await createPngBlob(workingCanvas);
-      await writePng(directoryHandle, fileName, blob);
-
-      progressBar.value = index + 1;
-      setStatus(`Generated ${index + 1} of ${outputRows.length}: ${fileName}`);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "MOV generation failed.");
     }
 
-    setStatus(`Done. Generated ${outputRows.length} PNG files.`);
+    progressBar.value = outputRows.length;
+    setStatus(`Done. Generated ${result.generated} MOV files in ${result.outputFolder}.`);
   } catch (error) {
-    if (error.name === "AbortError") {
-      setStatus("Output folder selection was canceled.");
-    } else {
-      setStatus(error.message);
-    }
+    setStatus(error.message);
   } finally {
     progressBar.hidden = true;
     updateGenerateState();
@@ -305,8 +249,14 @@ async function generateImages() {
 
 fileOneInput.addEventListener("change", handleFileChange);
 fileTwoInput.addEventListener("change", handleFileChange);
-backgroundColorInput.addEventListener("input", renderPreview);
-textColorInput.addEventListener("input", renderPreview);
-generateButton.addEventListener("click", generateImages);
+backgroundColorInput.addEventListener("input", updateGenerateState);
+textColorInput.addEventListener("input", updateGenerateState);
+animationColorInput.addEventListener("input", updateGenerateState);
+outputFolderInput.addEventListener("input", updateGenerateState);
+generateButton.addEventListener("click", generateVideos);
 
 renderPreview();
+
+if (window.location.protocol === "file:") {
+  setStatus("Open http://127.0.0.1:5173 to generate MOV files.");
+}

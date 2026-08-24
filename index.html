@@ -12,9 +12,9 @@
         <div class="header">
           <div>
             <h1 id="app-title">Placeholder Image Builder</h1>
-            <p>Generate 1920 x 1080 PNG files from two CSV files.</p>
+            <p>Generate 1920 x 1080 MOV files from two CSV files.</p>
           </div>
-          <button id="generateButton" type="button" disabled>Generate PNGs</button>
+          <button id="generateButton" type="button" disabled>Generate MOVs</button>
         </div>
 
         <div class="controls">
@@ -36,6 +36,16 @@
           <label class="field">
             <span>Text color</span>
             <input id="textColorInput" type="color" value="#111827" />
+          </label>
+
+          <label class="field">
+            <span>Animation color</span>
+            <input id="animationColorInput" type="color" value="#e0523f" />
+          </label>
+
+          <label class="field field-wide">
+            <span>Output folder path</span>
+            <input id="outputFolderInput" type="text" placeholder="/Users/Drew/Desktop/output" />
           </label>
         </div>
 
