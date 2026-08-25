@@ -12,9 +12,9 @@
         <div class="header">
           <div>
             <h1 id="app-title">Placeholder Image Builder</h1>
-            <p>Generate 1920 x 1080 MOV files from two CSV files.</p>
+            <p>Generate 1920 x 1080 PNG or MOV files from two CSV files.</p>
           </div>
-          <button id="generateButton" type="button" disabled>Generate MOVs</button>
+          <button id="generateButton" type="button" disabled>Generate Files</button>
         </div>
 
         <div class="controls">
@@ -41,6 +41,19 @@
           <label class="field">
             <span>Animation color</span>
             <input id="animationColorInput" type="color" value="#e0523f" />
+          </label>
+
+          <label class="field">
+            <span>Output format</span>
+            <select id="outputFormatInput">
+              <option value="mov">MOV</option>
+              <option value="png">PNG</option>
+            </select>
+          </label>
+
+          <label class="field checkbox-field">
+            <input id="alphaBackgroundInput" type="checkbox" />
+            <span>Alpha background</span>
           </label>
 
           <label class="field field-wide">

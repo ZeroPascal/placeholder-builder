@@ -17,7 +17,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -88,7 +89,8 @@ input[type="color"] {
   background: #fff;
 }
 
-input[type="text"] {
+input[type="text"],
+select {
   width: 100%;
   min-height: 42px;
   min-width: 0;
@@ -96,6 +98,21 @@ input[type="text"] {
   border: 1px solid #b8c0ca;
   border-radius: 6px;
   background: #fff;
+}
+
+.checkbox-field {
+  align-content: center;
+  grid-template-columns: auto 1fr;
+}
+
+.checkbox-field input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.checkbox-field span {
+  align-self: center;
 }
 
 .field {

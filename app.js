@@ -6,6 +6,8 @@ const fileTwoInput = document.querySelector("#fileTwoInput");
 const backgroundColorInput = document.querySelector("#backgroundColorInput");
 const textColorInput = document.querySelector("#textColorInput");
 const animationColorInput = document.querySelector("#animationColorInput");
+const outputFormatInput = document.querySelector("#outputFormatInput");
+const alphaBackgroundInput = document.querySelector("#alphaBackgroundInput");
 const outputFolderInput = document.querySelector("#outputFolderInput");
 const generateButton = document.querySelector("#generateButton");
 const previewCanvas = document.querySelector("#previewCanvas");
@@ -103,6 +105,8 @@ async function readCsvFile(file, fileLabel, minimumColumns) {
 }
 
 function updateGenerateState() {
+  const outputFormatLabel = outputFormatInput.value.toUpperCase();
+  generateButton.textContent = `Generate ${outputFormatLabel}s`;
   generateButton.disabled =
     fileOneRows.length === 0 ||
     fileTwoRows.length === 0 ||
@@ -161,8 +165,12 @@ function drawPreview(progress) {
   ];
   const lines = makeImageText(fileOneRow, fileTwoRow);
 
-  context.fillStyle = backgroundColorInput.value;
-  context.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+  if (alphaBackgroundInput.checked) {
+    drawCheckerboard(context);
+  } else {
+    context.fillStyle = backgroundColorInput.value;
+    context.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+  }
 
   context.fillStyle = textColorInput.value;
   context.textAlign = "center";
@@ -179,6 +187,18 @@ function drawPreview(progress) {
   drawPie(context, IMAGE_WIDTH / 2, 850, 100, progress, animationColorInput.value);
 }
 
+function drawCheckerboard(context) {
+  const size = 60;
+  const colors = ["#ffffff", "#d9dee5"];
+
+  for (let y = 0; y < IMAGE_HEIGHT; y += size) {
+    for (let x = 0; x < IMAGE_WIDTH; x += size) {
+      context.fillStyle = colors[(x / size + y / size) % 2];
+      context.fillRect(x, y, size, size);
+    }
+  }
+}
+
 function renderPreview() {
   drawPreview((performance.now() % 5000) / 5000);
   requestAnimationFrame(renderPreview);
@@ -193,7 +213,7 @@ async function handleFileChange() {
 
     if (fileOneRows.length > 0 && fileTwoRows.length > 0) {
       const outputCount = getOutputRows().length;
-      setStatus(`${fileOneRows.length} File 1 rows and ${fileTwoRows.length} File 2 rows loaded. ${outputCount} MOVs ready.`);
+      setStatus(`${fileOneRows.length} File 1 rows and ${fileTwoRows.length} File 2 rows loaded. ${outputCount} ${outputFormatInput.value.toUpperCase()}s ready.`);
     }
   } catch (error) {
     generateButton.disabled = true;
@@ -204,7 +224,7 @@ async function handleFileChange() {
 async function generateVideos() {
   try {
     if (window.location.protocol === "file:") {
-      throw new Error("Open http://127.0.0.1:5173 to generate MOV files.");
+      throw new Error("Open http://127.0.0.1:5173 to generate files.");
     }
 
     const outputRows = getOutputRows();
@@ -217,7 +237,7 @@ async function generateVideos() {
     progressBar.value = 0;
     progressBar.max = outputRows.length;
     generateButton.disabled = true;
-    setStatus("Starting MOV generation...");
+    setStatus(`Starting ${outputFormatInput.value.toUpperCase()} generation...`);
 
     const response = await fetch("/generate", {
       method: "POST",
@@ -228,17 +248,19 @@ async function generateVideos() {
         backgroundColor: backgroundColorInput.value,
         textColor: textColorInput.value,
         animationColor: animationColorInput.value,
+        outputFormat: outputFormatInput.value,
+        alphaBackground: alphaBackgroundInput.checked,
         outputFolder: outputFolderInput.value.trim(),
       }),
     });
 
     const result = await response.json();
     if (!response.ok || !result.ok) {
-      throw new Error(result.error || "MOV generation failed.");
+      throw new Error(result.error || "File generation failed.");
     }
 
     progressBar.value = outputRows.length;
-    setStatus(`Done. Generated ${result.generated} MOV files in ${result.outputFolder}.`);
+    setStatus(`Done. Generated ${result.generated} ${result.outputFormat.toUpperCase()} files in ${result.outputFolder}.`);
   } catch (error) {
     setStatus(error.message);
   } finally {
@@ -252,11 +274,15 @@ fileTwoInput.addEventListener("change", handleFileChange);
 backgroundColorInput.addEventListener("input", updateGenerateState);
 textColorInput.addEventListener("input", updateGenerateState);
 animationColorInput.addEventListener("input", updateGenerateState);
+outputFormatInput.addEventListener("change", updateGenerateState);
+alphaBackgroundInput.addEventListener("change", updateGenerateState);
 outputFolderInput.addEventListener("input", updateGenerateState);
 generateButton.addEventListener("click", generateVideos);
 
 renderPreview();
 
 if (window.location.protocol === "file:") {
-  setStatus("Open http://127.0.0.1:5173 to generate MOV files.");
+  setStatus("Open http://127.0.0.1:5173 to generate files.");
 }
+
+updateGenerateState();

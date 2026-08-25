@@ -1,5 +1,4 @@
 const { spawn } = require("child_process");
-const fs = require("fs");
 const fsp = require("fs/promises");
 const http = require("http");
 const os = require("os");
@@ -85,7 +84,7 @@ function makeImageText(fileOneRow, fileTwoRow) {
   ];
 }
 
-function makeOutputName(fileOneRow, fileTwoRow) {
+function makeOutputName(fileOneRow, fileTwoRow, outputFormat) {
   const rawName = [
     `${requiredCell(fileOneRow, 0, "File 1 column 1")}-${requiredCell(fileTwoRow, 1, "File 2 column 2")}`,
     requiredCell(fileOneRow, 1, "File 1 column 2"),
@@ -93,13 +92,13 @@ function makeOutputName(fileOneRow, fileTwoRow) {
     requiredCell(fileTwoRow, 2, "File 2 column 3"),
   ].join(" ");
 
-  return `${sanitizeFileName(rawName) || "placeholder"}.mov`;
+  return `${sanitizeFileName(rawName) || "placeholder"}.${outputFormat}`;
 }
 
 function makeUniqueFileName(fileName, usedFileNames) {
-  const match = fileName.match(/^(.*?)(\.mov)$/i);
+  const match = fileName.match(/^(.*?)(\.[a-z0-9]+)$/i);
   const baseName = match ? match[1] : fileName;
-  const extension = match ? match[2] : ".mov";
+  const extension = match ? match[2] : "";
   let candidate = fileName;
   let duplicateIndex = 2;
 
@@ -112,7 +111,7 @@ function makeUniqueFileName(fileName, usedFileNames) {
   return candidate;
 }
 
-function getOutputItems(fileOneRows, fileTwoRows) {
+function getOutputItems(fileOneRows, fileTwoRows, outputFormat) {
   const usedFileNames = new Set();
   const items = [];
 
@@ -124,7 +123,10 @@ function getOutputItems(fileOneRows, fileTwoRows) {
 
       items.push({
         lines: makeImageText(fileOneRow, fileTwoRow),
-        fileName: makeUniqueFileName(makeOutputName(fileOneRow, fileTwoRow), usedFileNames),
+        fileName: makeUniqueFileName(
+          makeOutputName(fileOneRow, fileTwoRow, outputFormat),
+          usedFileNames,
+        ),
       });
     });
   });
@@ -136,13 +138,24 @@ function blendChannel(foreground, background, alpha) {
   return Math.round(foreground * alpha + background * (1 - alpha));
 }
 
-function makeBaseFrame(backgroundRgb, animationRgb) {
-  const frame = Buffer.allocUnsafe(WIDTH * HEIGHT * 3);
+function getChannelCount(alphaBackground) {
+  return alphaBackground ? 4 : 3;
+}
 
-  for (let index = 0; index < frame.length; index += 3) {
+function makeBaseFrame(backgroundRgb, animationRgb, alphaBackground) {
+  const channelCount = getChannelCount(alphaBackground);
+  const frame = Buffer.allocUnsafe(WIDTH * HEIGHT * channelCount);
+
+  for (let index = 0; index < frame.length; index += channelCount) {
     frame[index] = backgroundRgb[0];
     frame[index + 1] = backgroundRgb[1];
     frame[index + 2] = backgroundRgb[2];
+    if (alphaBackground) {
+      frame[index] = 0;
+      frame[index + 1] = 0;
+      frame[index + 2] = 0;
+      frame[index + 3] = 0;
+    }
   }
 
   const ringInner = PIE_RADIUS - 5;
@@ -155,10 +168,13 @@ function makeBaseFrame(backgroundRgb, animationRgb) {
     for (let x = PIE_CENTER_X - ringOuter; x <= PIE_CENTER_X + ringOuter; x += 1) {
       const distance = Math.hypot(x - PIE_CENTER_X, y - PIE_CENTER_Y);
       if (distance >= ringInner && distance <= ringOuter) {
-        const offset = (y * WIDTH + x) * 3;
-        frame[offset] = ringColor[0];
-        frame[offset + 1] = ringColor[1];
-        frame[offset + 2] = ringColor[2];
+        const offset = (y * WIDTH + x) * channelCount;
+        frame[offset] = alphaBackground ? animationRgb[0] : ringColor[0];
+        frame[offset + 1] = alphaBackground ? animationRgb[1] : ringColor[1];
+        frame[offset + 2] = alphaBackground ? animationRgb[2] : ringColor[2];
+        if (alphaBackground) {
+          frame[offset + 3] = 71;
+        }
       }
     }
   }
@@ -166,8 +182,9 @@ function makeBaseFrame(backgroundRgb, animationRgb) {
   return frame;
 }
 
-function drawPieFrame(frame, progress, animationRgb) {
+function drawPieFrame(frame, progress, animationRgb, alphaBackground) {
   const angleLimit = Math.PI * 2 * progress;
+  const channelCount = getChannelCount(alphaBackground);
 
   for (let y = PIE_CENTER_Y - PIE_RADIUS; y <= PIE_CENTER_Y + PIE_RADIUS; y += 1) {
     for (let x = PIE_CENTER_X - PIE_RADIUS; x <= PIE_CENTER_X + PIE_RADIUS; x += 1) {
@@ -183,10 +200,13 @@ function drawPieFrame(frame, progress, animationRgb) {
       }
 
       if (angle <= angleLimit) {
-        const offset = (y * WIDTH + x) * 3;
+        const offset = (y * WIDTH + x) * channelCount;
         frame[offset] = animationRgb[0];
         frame[offset + 1] = animationRgb[1];
         frame[offset + 2] = animationRgb[2];
+        if (alphaBackground) {
+          frame[offset + 3] = 255;
+        }
       }
     }
   }
@@ -231,20 +251,20 @@ function makeDrawTextFilter(textFiles, textColor) {
 }
 
 function waitForDrain(stream) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     stream.once("drain", resolve);
-    stream.once("error", reject);
   });
 }
 
-async function writeFrames(stream, baseFrame, animationRgb) {
-  for (let frameIndex = 0; frameIndex < FRAME_COUNT; frameIndex += 1) {
+async function writeFrames(stream, baseFrame, animationRgb, alphaBackground, frameCount) {
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
     if (stream.destroyed) {
       return;
     }
 
     const frame = Buffer.from(baseFrame);
-    drawPieFrame(frame, frameIndex / FRAME_COUNT, animationRgb);
+    const progress = frameCount === 1 ? 1 : frameIndex / frameCount;
+    drawPieFrame(frame, progress, animationRgb, alphaBackground);
 
     try {
       if (!stream.write(frame)) {
@@ -261,38 +281,64 @@ async function writeFrames(stream, baseFrame, animationRgb) {
   stream.end();
 }
 
-async function runFfmpeg(outputPath, lines, colors) {
+function makeFfmpegArgs(outputPath, filter, outputFormat, alphaBackground) {
+  const inputPixelFormat = alphaBackground ? "rgba" : "rgb24";
+  const args = [
+    "-y",
+    "-f",
+    "rawvideo",
+    "-pix_fmt",
+    inputPixelFormat,
+    "-s:v",
+    `${WIDTH}x${HEIGHT}`,
+    "-r",
+    String(FPS),
+    "-i",
+    "pipe:0",
+  ];
+
+  if (outputFormat === "mov") {
+    args.push(
+      "-t",
+      String(DURATION_SECONDS),
+      "-vf",
+      filter,
+      "-an",
+      "-c:v",
+      "prores_ks",
+      "-profile:v",
+      alphaBackground ? "4" : "3",
+      "-pix_fmt",
+      alphaBackground ? "yuva444p10le" : "yuv422p10le",
+      outputPath,
+    );
+    return args;
+  }
+
+  args.push(
+    "-frames:v",
+    "1",
+    "-vf",
+    filter,
+    "-pix_fmt",
+    alphaBackground ? "rgba" : "rgb24",
+    outputPath,
+  );
+  return args;
+}
+
+async function runFfmpeg(outputPath, lines, colors, outputFormat, alphaBackground) {
   const { temporaryDirectory, files } = await writeTextFiles(lines);
   const filter = makeDrawTextFilter(files, colors.text);
-  const baseFrame = makeBaseFrame(colors.background.rgb, colors.animation.rgb);
+  const baseFrame = makeBaseFrame(colors.background.rgb, colors.animation.rgb, alphaBackground);
+  const frameCount = outputFormat === "png" ? 1 : FRAME_COUNT;
 
   try {
     await new Promise((resolve, reject) => {
-      const ffmpeg = spawn("ffmpeg", [
-        "-y",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgb24",
-        "-s:v",
-        `${WIDTH}x${HEIGHT}`,
-        "-r",
-        String(FPS),
-        "-i",
-        "pipe:0",
-        "-t",
-        String(DURATION_SECONDS),
-        "-vf",
-        filter,
-        "-an",
-        "-c:v",
-        "prores_ks",
-        "-profile:v",
-        "3",
-        "-pix_fmt",
-        "yuv422p10le",
-        outputPath,
-      ]);
+      const ffmpeg = spawn(
+        "ffmpeg",
+        makeFfmpegArgs(outputPath, filter, outputFormat, alphaBackground),
+      );
       let errorOutput = "";
 
       ffmpeg.stderr.on("data", (chunk) => {
@@ -312,7 +358,7 @@ async function runFfmpeg(outputPath, lines, colors) {
         }
       });
 
-      writeFrames(ffmpeg.stdin, baseFrame, colors.animation.rgb).catch((error) => {
+      writeFrames(ffmpeg.stdin, baseFrame, colors.animation.rgb, alphaBackground, frameCount).catch((error) => {
         ffmpeg.stdin.destroy(error);
         reject(error);
       });
@@ -354,19 +400,28 @@ async function handleGenerate(request, response) {
       text: parseColor(body.textColor, "Text color"),
       animation: parseColor(body.animationColor, "Animation color"),
     };
-    const items = getOutputItems(body.fileOneRows, body.fileTwoRows);
+    const outputFormat = body.outputFormat === "png" ? "png" : "mov";
+    const alphaBackground = body.alphaBackground === true;
+    const items = getOutputItems(body.fileOneRows, body.fileTwoRows, outputFormat);
 
     if (items.length === 0) {
       throw new Error("No files to generate because File 2 column 3 is empty in every row.");
     }
 
     for (const item of items) {
-      await runFfmpeg(path.join(outputFolder, item.fileName), item.lines, colors);
+      await runFfmpeg(
+        path.join(outputFolder, item.fileName),
+        item.lines,
+        colors,
+        outputFormat,
+        alphaBackground,
+      );
     }
 
     sendJson(response, 200, {
       ok: true,
       generated: items.length,
+      outputFormat,
       outputFolder,
     });
   } catch (error) {
