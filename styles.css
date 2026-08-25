@@ -17,7 +17,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -53,7 +54,7 @@ p {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -86,6 +87,40 @@ input[type="color"] {
   border: 1px solid #b8c0ca;
   border-radius: 6px;
   background: #fff;
+}
+
+input[type="text"],
+select {
+  width: 100%;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid #b8c0ca;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.checkbox-field {
+  align-content: center;
+  grid-template-columns: auto 1fr;
+}
+
+.checkbox-field input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.checkbox-field span {
+  align-self: center;
+}
+
+.field {
+  grid-column: span 2;
+}
+
+.field-wide {
+  grid-column: span 4;
 }
 
 button {
@@ -144,5 +179,10 @@ progress {
 
   .controls {
     grid-template-columns: 1fr;
+  }
+
+  .field,
+  .field-wide {
+    grid-column: auto;
   }
 }
